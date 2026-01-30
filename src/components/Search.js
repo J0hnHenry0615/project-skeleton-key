@@ -1,110 +1,96 @@
-// src/components/Search.js
+// src/components/SearchResults.js
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { searchContent } from '@/lib/wordpress';
-import { useRouter } from 'next/navigation';
 
-export default function Search() {
-  const [query, setQuery] = useState('');
+export default function SearchResults() {
+  const searchParams = useSearchParams();
+  const query = searchParams.get('q') || '';
   const [results, setResults] = useState([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-  const searchRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setIsOpen(false);
+    async function performSearch() {
+      if (!query) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const searchResults = await searchContent(query);
+        setResults(searchResults);
+      } catch (error) {
+        console.error('Search error:', error);
+      } finally {
+        setIsLoading(false);
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Search when user types (with delay)
-  useEffect(() => {
-    // Don't search if query is too short
-    if (query.length < 3) {
-      setResults([]);
-      setIsOpen(false);
-      return;
-    }
-
-    // Delay search by 500ms (wait for user to finish typing)
-    const timer = setTimeout(async () => {
-      setIsLoading(true);
-      const searchResults = await searchContent(query);
-      setResults(searchResults);
-      setIsOpen(true);
-      setIsLoading(false);
-    }, 500);
-
-    // Cleanup timer
-    return () => clearTimeout(timer);
+    performSearch();
   }, [query]);
 
-  // Handle clicking a result
-  const handleResultClick = (url) => {
-    // Convert WordPress URL to Next.js path
-    const path = url.replace(process.env.NEXT_PUBLIC_WORDPRESS_URL || '', '');
-    setIsOpen(false);
-    setQuery('');
-    router.push(path);
-  };
+  if (!query) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-gray-600 text-lg">Enter a search term to get started</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Searching for "{query}"...</p>
+      </div>
+    );
+  }
+
+  if (results.length === 0) {
+    return (
+      <div className="text-center py-20">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">No results found</h2>
+        <p className="text-gray-600 mb-8">
+          We couldn't find anything matching "{query}"
+        </p>
+        <Link
+          href="/"
+          className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+        >
+          Back to Home
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative w-full lg:w-auto" ref={searchRef}>
-      {/* Search Input */}
-      <div className="relative">
-        <input
-          type="text"
-          placeholder="Search..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full lg:w-64 px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm lg:text-base"
-        />
-        
-        {/* Search Icon or Loading Spinner */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          {isLoading ? (
-            <div className="animate-spin h-5 w-5 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-          ) : (
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          )}
-        </div>
-      </div>
+    <div>
+      <p className="text-gray-600 mb-8">
+        Found {results.length} result{results.length !== 1 ? 's' : ''} for "{query}"
+      </p>
 
-      {/* Search Results Dropdown */}
-      {isOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 lg:right-auto lg:w-96 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto z-50">
-          {results.map((result) => (
-            <button
-              key={result.id}
-              onClick={() => handleResultClick(result.url)}
-              className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition"
-            >
-              <div className="font-semibold text-gray-900 text-sm lg:text-base">{result.title}</div>
-              {result.subtype && (
-                <div className="text-xs text-gray-500 mt-1">{result.subtype}</div>
+      <div className="space-y-6">
+        {results.map((result, index) => (
+          <div key={index} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition">
+            <Link href={result.url || '#'} className="block group">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition">
+                {result.title || 'Untitled'}
+              </h2>
+              {result.excerpt && (
+                <p className="text-gray-600" dangerouslySetInnerHTML={{ __html: result.excerpt }} />
               )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* No Results Message */}
-      {isOpen && !isLoading && query.length >= 3 && results.length === 0 && (
-        <div className="absolute top-full left-0 right-0 lg:right-auto lg:w-96 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-4 text-gray-600 text-center z-50 text-sm lg:text-base">
-          No results found for "{query}"
-        </div>
-      )}
+              <span className="text-blue-600 text-sm mt-2 inline-block group-hover:underline">
+                Read more →
+              </span>
+            </Link>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
