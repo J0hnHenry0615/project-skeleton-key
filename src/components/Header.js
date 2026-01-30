@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import Navigation from './Navigation';
-import Search from './Search';
 import { getSiteOptions } from '@/lib/wordpress';
 
 export default function Header() {
@@ -47,7 +46,6 @@ export default function Header() {
           {/* Navigation & Search */}
           <div className="flex items-center gap-8">
             <Navigation />
-            <Search />
           </div>
         </div>
       </div>
